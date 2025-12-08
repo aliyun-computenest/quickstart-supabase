@@ -3,10 +3,7 @@ Service:
   DeployMetadata:
     SupplierDeployMetadata:
       ArtifactRelation:
-        centos_7_9_x64_20G_alibase_20240403.vhd:
-          ArtifactId: ${Artifact.Artifact_1.ArtifactId}
-          ArtifactVersion: ${Artifact.Artifact_1.ArtifactVersion}
-        windows:
+        centos_7:
           ArtifactId: ${Artifact.Artifact_1.ArtifactId}
           ArtifactVersion: ${Artifact.Artifact_1.ArtifactVersion}
       SupplierTemplateConfigs:
@@ -17,12 +14,6 @@ Service:
       - Name: 单机版
         Url: ros_templates/template.yaml
         PredefinedParameters: []
-        DeployScene: ECS
-        OutputConfigs:
-          - OutputKey: SQL Server Private Addresses Linux
-            EnableWebProxy: true
-          - OutputKey: SQL Server Private Addresses Windows
-            EnableWebProxy: true
     NetworkMetadata:
       EnablePrivateVpcConnection: false
       EnableReversePrivateVpcConnection: false
