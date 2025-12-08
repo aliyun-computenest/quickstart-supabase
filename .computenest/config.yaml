@@ -1,0 +1,103 @@
+Service:
+  DeployType: ros
+  DeployMetadata:
+    SupplierDeployMetadata:
+      ArtifactRelation:
+        centos_7_9_x64_20G_alibase_20240403.vhd:
+          ArtifactId: ${Artifact.Artifact_1.ArtifactId}
+          ArtifactVersion: ${Artifact.Artifact_1.ArtifactVersion}
+        windows:
+          ArtifactId: ${Artifact.Artifact_1.ArtifactId}
+          ArtifactVersion: ${Artifact.Artifact_1.ArtifactVersion}
+      SupplierTemplateConfigs:
+        - Name: 单机版
+          Url: ros_templates/template.yaml
+          PredefinedParameters: []
+    TemplateConfigs:
+      - Name: 单机版
+        Url: ros_templates/template.yaml
+        PredefinedParameters: []
+        DeployScene: ECS
+        OutputConfigs:
+          - OutputKey: SQL Server Private Addresses Linux
+            EnableWebProxy: true
+          - OutputKey: SQL Server Private Addresses Windows
+            EnableWebProxy: true
+    NetworkMetadata:
+      EnablePrivateVpcConnection: false
+      EnableReversePrivateVpcConnection: false
+    ServiceInstanceNameRule:
+      Prefix: Supabase
+      UseDefaultValue: false
+  OperationMetadata:
+    SupportBackup: false
+    PrometheusConfigMap:
+      单机版:
+        EnablePrometheus: false
+  ServiceType: private
+  ServiceInfo:
+    Locale: zh-CN
+    ShortDescription: "Supabase 是一个开源的、基于 PostgreSQL 的 Firebase 替代方案，旨在为开发者提供一套完整、可扩展且完全托管的后端即服务（BaaS, Backend-as-a-Service）工具集。它让你无需从零搭建服务器，就能快速构建现代 Web 和移动应用。\n"
+    Image: resources/icons/service_logo.png
+    Name: Supabase社区版
+  ShareType: Public
+  ApprovalType: Manual
+Artifact:
+  Artifact_1:
+    ArtifactType: EcsImage
+    ArtifactName: Supabase
+    Description: Supabase
+    ArtifactProperty:
+      RegionId: ${ImageBuilder.EcsImage.RegionId}
+      ImageId: ${ImageBuilder.EcsImage.SourceImageId}
+ImageBuilder:
+  EcsImage:
+    RegionId: ap-southeast-1
+    SourceImageId: aliyun_3_x64_20G_alibase_20240819.vhd
+    SystemDiskSize: 40
+    InstanceType: ecs.e-c1m2.2xlarge
+    InternetMaxBandwidthOut: 100
+    CommandType: RunShellScript
+    Timeout: 10800
+    Tags: [ ]
+    CommandContent: |-
+        #!/bin/bash
+        # 升级基础组件：
+        yum check-update
+        yum -y upgrade --security
+        yum -y upgrade-minimal
+
+        # 安装docker-ce
+        yum-config-manager --add-repo http://mirrors.aliyun.com/docker-ce/linux/centos/docker-ce.repo
+        yum makecache
+        yum install -y curl git docker-ce
+
+        sudo systemctl enable --now docker.socket
+        sudo systemctl enable --now docker.service
+
+        cd /root
+        # Get the code
+        git clone --depth 1 https://github.com/supabase/supabase
+
+        # Make your new supabase project directory
+        mkdir supabase-project
+
+        # Tree should look like this
+        # .
+        # ├── supabase
+        # └── supabase-project
+
+        # Copy the compose files over to your project
+        cp -rf supabase/docker/* supabase-project
+
+        # Copy the fake env vars
+        cp supabase/docker/.env.example supabase-project/.env
+
+        # Switch to your project directory
+        cd supabase-project
+
+        # Pull the latest images
+        docker compose pull
+
+        # Start the services (in detached mode)
+        docker compose up -d
