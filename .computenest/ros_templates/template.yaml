@@ -1,48 +1,42 @@
 ROSTemplateFormatVersion: '2015-09-01'
 Description:
-  en: Deploy Theia CE
-  zh-cn: 部署Theia社区版
+  en: DockerCompose service template
+  zh-cn: DockerCompose服务模板
+Locals:
+  CurTime:
+    Type: Eval
+    Value:
+      Fn::FormatTime:
+        - '%Y%m%d-%H%M%S'
+        - Asia/Shanghai
+Conditions:
+  CreateVpcConditions:
+    Fn::Equals:
+      - NewVPC
+      - Ref: VpcOption
+  EnablePublicIpConditions:
+    Fn::Equals:
+      - true
+      - Ref: EnablePublicIp
 Parameters:
-  ZoneId:
+  VpcOption:
     Type: String
-    AssociationProperty: ALIYUN::ECS::Instance::ZoneId
-    Label:
-      en: VSwitch Availability Zone
-      zh-cn: 交换机可用区
-  WhetherCreateVpc:
-    Type: Boolean
-    Label:
-      en: WhetherCreateVpc
-      zh-cn: 是否新建VPC
-    Default: false
-  VpcId:
-    Type: String
-    Label:
-      en: VPC ID
-      zh-cn: 专有网络VPC实例ID
-    Default: ''
-    AssociationProperty: ALIYUN::ECS::VPC::VPCId
+    AllowedValues:
+      - NewVPC
+      - ExistingVPC
     AssociationPropertyMetadata:
-      Visible:
-        Condition:
-          Fn::Equals:
-            - ${WhetherCreateVpc}
-            - false
-  VSwitchId:
-    Type: String
+      ValueLabelMapping:
+        NewVPC:
+          zh-cn: 新建专有网络
+          en: New VPC
+        ExistingVPC:
+          zh-cn: 已有专有网络
+          en: Existing VPC
     Label:
-      en: VSwitch ID
-      zh-cn: 交换机实例ID
-    Default: ''
-    AssociationProperty: ALIYUN::ECS::VSwitch::VSwitchId
-    AssociationPropertyMetadata:
-      VpcId: ${VpcId}
-      ZoneId: ${ZoneId}
-      Visible:
-        Condition:
-          Fn::Equals:
-            - ${WhetherCreateVpc}
-            - false
+      en: Select Existing or New VPC
+      zh-cn: 选择已有/新建的专有网络
+    Required: true
+    Default: NewVPC
   VpcCidrBlock:
     Type: String
     Label:
@@ -52,13 +46,17 @@ Parameters:
       zh-cn: VPC的ip地址段范围，<br>您可以使用以下的ip地址段或其子网:<br><font color='green'>[10.0.0.0/8]</font><br><font color='green'>[172.16.0.0/12]</font><br><font color='green'>[192.168.0.0/16]</font>
       en: 'The ip address range of the VPC in the CidrBlock form; <br>You can use the following ip address ranges and their subnets: <br><font color=''green''>[10.0.0.0/8]</font><br><font color=''green''>[172.16.0.0/12]</font><br><font color=''green''>[192.168.0.0/16]</font>'
     Default: 192.168.0.0/16
+    Required:
+      Fn::Equals:
+        - NewVPC
+        - ${VpcOption}
     AssociationProperty: ALIYUN::VPC::VPC::CidrBlock
     AssociationPropertyMetadata:
       Visible:
         Condition:
           Fn::Equals:
-            - ${WhetherCreateVpc}
-            - true
+            - NewVPC
+            - ${VpcOption}
   VSwitchCidrBlock:
     Type: String
     Label:
@@ -68,36 +66,18 @@ Parameters:
       zh-cn: 必须属于VPC的子网段。
       en: Must belong to the subnet segment of VPC.
     Default: 192.168.1.0/24
+    Required:
+      Fn::Equals:
+        - NewVPC
+        - ${VpcOption}
     AssociationProperty: ALIYUN::VPC::VSwitch::CidrBlock
     AssociationPropertyMetadata:
       VpcCidrBlock: VpcCidrBlock
       Visible:
         Condition:
           Fn::Equals:
-            - ${WhetherCreateVpc}
-            - true
-  EcsInstanceType:
-    Type: String
-    Label:
-      en: Instance Type
-      zh-cn: 实例类型
-    AssociationProperty: ALIYUN::ECS::Instance::InstanceType
-    AssociationPropertyMetadata:
-      ZoneId: ${ZoneId}
-      InstanceChargeType: ${InstanceChargeType}
-  InstancePassword:
-    NoEcho: true
-    Type: String
-    AllowedPattern: '[0-9A-Za-z\_\-\&:;''<>,=%`~!@#\(\)\$\^\*\+\|\{\}\[\]\.\?\/]+$'
-    Label:
-      en: Instance Password
-      zh-cn: 实例密码
-    ConstraintDescription:
-      en: Length 8-30, must contain three(Capital letters, lowercase letters, numbers, ()`~!@#$%^&*_-+=|{}[]:;'<>,.?/ Special symbol in)
-      zh-cn: 长度8-30，必须包含三项（大写字母、小写字母、数字、 ()`~!@#$%^&*_-+=|{}[]:;'<>,.?/ 中的特殊符号）
-    MinLength: 8
-    MaxLength: 30
-    AssociationProperty: ALIYUN::ECS::Instance::Password
+            - NewVPC
+            - ${VpcOption}
   PayType:
     Type: String
     Label:
@@ -112,9 +92,6 @@ Parameters:
       LocaleKey: InstanceChargeType
   PayPeriodUnit:
     Type: String
-    Description:
-      en: The long cycle of purchasing resources. <br>Week is a Week and Month is a Month. <br> The default value is month.<br><b><font color='red'> When ECS instance types are PrePaid valid </b></font>
-      zh-cn: 购买资源时长的周期。<br>Week为周，Month为月<br>默认值为月<br><b><font color='red'>当ECS实例类型为PrePaid有效</b></font>
     Label:
       en: Pay Period Unit
       zh-cn: 购买资源时长周期
@@ -154,34 +131,152 @@ Parameters:
             Fn::Equals:
               - ${PayType}
               - PostPaid
-Mappings: {}
-Conditions:
-  CreateVpcConditions:
-    Fn::Equals:
-      - true
-      - Ref: WhetherCreateVpc
+  EcsInstanceType:
+    Type: String
+    Label:
+      en: Instance Type
+      zh-cn: 实例类型
+    AssociationProperty: ALIYUN::ECS::Instance::InstanceType
+    AssociationPropertyMetadata:
+      InstanceChargeType: ${PayType}
+      Constraints:
+        InstanceTypeFamily:
+          - ecs.u1
+          - ecs.e
+    AllowedValues:
+      - ecs.u1-c1m2.xlarge
+      - ecs.u1-c1m4.xlarge
+      - ecs.u1-c1m8.xlarge
+      - ecs.u1-c1m1.2xlarge
+      - ecs.u1-c1m2.2xlarge
+      - ecs.u1-c1m4.2xlarge
+      - ecs.u1-c1m8.2xlarge
+      - ecs.u1-c1m1.3xlarge
+      - ecs.u1-c1m2.3xlarge
+      - ecs.u1-c1m4.3xlarge
+      - ecs.u1-c1m8.3xlarge
+      - ecs.u1-c1m1.4xlarge
+      - ecs.u1-c1m2.4xlarge
+      - ecs.u1-c1m4.4xlarge
+      - ecs.u1-c1m8.4xlarge
+      - ecs.u1-c1m1.8xlarge
+      - ecs.u1-c1m2.8xlarge
+      - ecs.u1-c1m4.8xlarge
+      - ecs.u1-c1m8.8xlarge
+  InstancePassword:
+    NoEcho: true
+    Type: String
+    Description:
+      en: Server login password, Length 8-30, must contain three(Capital letters, lowercase letters, numbers, ()`~!@#$%^&*_-+=|{}[]:;'<>,.?/ Special symbol in)
+      zh-cn: 服务器登录密码,长度8-30，必须包含三项（大写字母、小写字母、数字、 ()`~!@#$%^&*_-+=|{}[]:;'<>,.?/ 中的特殊符号）
+    AllowedPattern: '^[a-zA-Z0-9-\(\)\`\~\!\@\#\$\%\^\&\*\_\-\+\=\|\{\}\[\]\:\;\<\>\,\.\?\/]*$'
+    Label:
+      en: Instance Password
+      zh-cn: 实例密码
+    ConstraintDescription:
+      en: Length 8-30, must contain three(Capital letters, lowercase letters, numbers, ()`~!@#$%^&*_-+=|{}[]:;'<>,.?/ Special symbol in)
+      zh-cn: 长度8-30，必须包含三项（大写字母、小写字母、数字、 ()`~!@#$%^&*_-+=|{}[]:;'<>,.?/ 中的特殊符号）
+    MinLength: 8
+    MaxLength: 30
+    AssociationProperty: ALIYUN::ECS::Instance::Password
+  EnablePublicIp:
+    Type: Boolean
+    Label:
+      en: Whether Enable Public IP
+      zh-cn: 是否开启公网IP
+    Default: true
+  ZoneId:
+    Type: String
+    Label:
+      en: Zone ID
+      zh-cn: 可用区ID
+    AssociationProperty: ALIYUN::ECS::Instance::ZoneId
+  VpcId:
+    Type: String
+    Label:
+      en: VPC ID
+      zh-cn: 专有网络VPC实例ID
+    AssociationProperty: 'ALIYUN::ECS::VPC::VPCId'
+    Required:
+      Fn::Equals:
+        - ExistingVPC
+        - ${VpcOption}
+    Default: ''
+    AssociationPropertyMetadata:
+      AutoSelectFirst: true
+      Visible:
+        Condition:
+          Fn::Equals:
+            - ExistingVPC
+            - ${VpcOption}
+  VSwitchId:
+    Type: String
+    Label:
+      en: VSwitch ID
+      zh-cn: 交换机实例ID
+    Default: ''
+    Required:
+      Fn::Equals:
+        - ExistingVPC
+        - ${VpcOption}
+    AssociationProperty: 'ALIYUN::ECS::VSwitch::VSwitchId'
+    AssociationPropertyMetadata:
+      AutoSelectFirst: true
+      VpcId: ${VpcId}
+      ZoneId: ${ZoneId}
+      Visible:
+        Condition:
+          Fn::Equals:
+            - ExistingVPC
+            - ${VpcOption}
+  SUPABASE_USER:
+    Type: String
+    AllowedPattern: '^[a-zA-Z0-9-\(\)\`\~\!\@\#\$\%\^\&\*\_\-\+\=\|\{\}\[\]\:\;\<\>\,\.\?\/]*$'
+    Label:
+      en: SUPABASE Username
+      zh-cn: SUPABASE 用户名
+    Default: admin
+  SUPABASE_PASSWORD:
+    NoEcho: true
+    Type: String
+    AllowedPattern: '^[a-zA-Z0-9-\(\)\`\~\!\@\#\$\%\^\&\*\_\-\+\=\|\{\}\[\]\:\;\<\>\,\.\?\/]*$'
+    Label:
+      en: SUPABASE PASSWORD
+      zh-cn: SUPABASE 密码
+    ConstraintDescription:
+      en: Length 8-30, must contain three(Capital letters, lowercase letters, numbers, ()`~!@#$%^&*_-+=|{}[]:;'<>,.?/ Special symbol in)
+      zh-cn: 长度8-30，必须包含三项（大写字母、小写字母、数字、 ()`~!@#$%^&*_-+=|{}[]:;'<>,.?/ 中的特殊符号）
+    MinLength: 8
+    MaxLength: 30
+    AssociationProperty: ALIYUN::ECS::Instance::Password
 Resources:
+  # 新建vpc
   EcsVpc:
     Type: ALIYUN::ECS::VPC
     Condition: CreateVpcConditions
     Properties:
-      CidrBlock:
-        Ref: VpcCidrBlock
       VpcName:
         Ref: ALIYUN::StackName
+      CidrBlock:
+        Ref: VpcCidrBlock
+  # 新建vswitch
   EcsVSwitch:
-    Type: ALIYUN::ECS::VSwitch
     Condition: CreateVpcConditions
+    Type: ALIYUN::ECS::VSwitch
     Properties:
+      VSwitchName:
+        Ref: ALIYUN::StackName
       VpcId:
         Ref: EcsVpc
       ZoneId:
         Ref: ZoneId
       CidrBlock:
         Ref: VSwitchCidrBlock
-  EcsSecurityGroup:
+  SecurityGroup:
     Type: ALIYUN::ECS::SecurityGroup
     Properties:
+      SecurityGroupName:
+        Ref: ALIYUN::StackName
       VpcId:
         Fn::If:
           - CreateVpcConditions
@@ -193,17 +288,15 @@ Resources:
           SourceCidrIp: 0.0.0.0/0
           IpProtocol: tcp
           NicType: internet
-        - PortRange: 3000/3000
+        - PortRange: 8000/8000
           Priority: 1
           SourceCidrIp: 0.0.0.0/0
           IpProtocol: tcp
           NicType: internet
-  EcsInstanceGroup:
+  InstanceGroup:
     Type: ALIYUN::ECS::InstanceGroup
     Properties:
-      ZoneId:
-        Ref: ZoneId
-      IoOptimized: optimized
+      # 付费类型
       InstanceChargeType:
         Ref: PayType
       PeriodUnit:
@@ -216,40 +309,126 @@ Resources:
           - Ref: EcsVpc
           - Ref: VpcId
       VSwitchId:
-        Fn::If:
+        'Fn::If':
           - CreateVpcConditions
           - Ref: EcsVSwitch
           - Ref: VSwitchId
+      ZoneId:
+        Ref: ZoneId
       SecurityGroupId:
-        Ref: EcsSecurityGroup
-      SystemDiskCategory: cloud_essd
-      # 系统盘大小可以根据需要调整
-      SystemDiskSize: 100
-      # 数据盘配置
-      MaxAmount: 1
-      ImageId: centos_7
-      InstanceType:
-        Ref: EcsInstanceType
+        Ref: SecurityGroup
+      ImageId: centos_7_9_x64_20G_alibase_20240403.vhd
       Password:
         Ref: InstancePassword
-      # 公网带宽, 为0代表不开公网
-      InternetMaxBandwidthOut: 5
-      InstanceName:
-        Fn::Join:
-          - '-'
-          - - Ref: ALIYUN::StackName
-            - '[1,4]'
+      InstanceType:
+        Ref: EcsInstanceType
+      SystemDiskCategory: cloud_essd
+      SystemDiskSize: 200
+      DiskMappings:
+        - Category: cloud_essd
+          Size: 200
+          Device: /dev/xvdb
+      InternetMaxBandwidthOut:
+        Fn::If:
+          - EnablePublicIpConditions
+          - 5
+          - 0
+      IoOptimized: optimized
+      MaxAmount: 1
+  RunInstallCommand:
+    Type: ALIYUN::ECS::RunCommand
+    Properties:
+      InstanceIds:
+        Fn::GetAtt:
+        - InstanceGroup
+        - InstanceIds
+      Type: RunShellScript
+      Sync: true
+      Timeout: 3600
+      CommandContent:
+        Fn::Sub:
+          - |
+            #!/bin/bash
+            disk_device="/dev/vdb"
+            parted_disk_device="/dev/vdb1"
+            mount_point="/mnt/data"
+            # 已初始化的磁盘，跳过初始化，直接挂载
+            if blkid -o value -s TYPE $disk_device &>/dev/null; then
+              echo "Disk is already initialized."
+            else
+              echo "Disk is not initialized, initializing..."
+              cat >> /root/InitDataDisk.sh << "EOF"
+              #!/bin/bash
+              echo "p
+              n
+              p
 
+
+
+              w
+              " |  fdisk -u /dev/vdb
+            EOF
+              /bin/bash /root/InitDataDisk.sh
+              rm -f /root/InitDataDisk.sh
+              mkfs -t ext4 $parted_disk_device
+            fi
+
+            cp /etc/fstab /etc/fstab.bak
+            mkdir $mount_point
+            echo `blkid $parted_disk_device | awk '{print $2}' | sed 's/\\\"//g'` $mount_point ext4 defaults 0 0 >> /etc/fstab
+            mount -a
+
+            cd /root/supabase-project
+            docker compose down
+
+            ENV_FILE="/root/supabase-project/.env"
+            sed -i "s/^DASHBOARD_USERNAME *=.*/DASHBOARD_USERNAME=${SUPABASE_USER}/" $ENV_FILE
+            sed -i "s/^DASHBOARD_PASSWORD *=.*/DASHBOARD_PASSWORD=${SUPABASE_PASSWORD}/" $ENV_FILE
+            cp -r ./volumes/ /mnt/data/volumes
+            COMPOSE_FILE="/root/supabase-project/docker-compose.yml"
+            sed -i -E 's|\./volumes|/mnt/data/volumes|g' "$COMPOSE_FILE"
+            chmod -R 777 /mnt/data/
+
+            docker compose up -d
+
+          - SUPABASE_USER:
+              Ref: SUPABASE_USER
+            SUPABASE_PASSWORD:
+              Ref: SUPABASE_PASSWORD
 Outputs:
-  Public IP Address:
+  Supabase Addresses:
+    Description:
+      zh-cn: Supabase 地址
+      en: Supabase Addresses
     Value:
       Fn::Sub:
-        - 'http://${ServerAddress}:3000'
+        - 'http://${ServerAddress}:8000'
+        - ServerAddress:
+            Fn::If:
+              - EnablePublicIpConditions
+              - Fn::Select:
+                - 0
+                - Fn::GetAtt:
+                  - InstanceGroup
+                  - PublicIps
+              - Fn::Select:
+                - 0
+                - Fn::GetAtt:
+                  - InstanceGroup
+                  - PrivateIps
+  Supabase Private Addresses:
+    Condition: EnablePublicIpConditions
+    Description:
+      zh-cn: Supabase 内网地址
+      en: Supabase Private Addresses
+    Value:
+      Fn::Sub:
+        - 'http://${ServerAddress}:8000'
         - ServerAddress:
             Fn::Select:
               - 0
               - Fn::GetAtt:
-                  - EcsInstanceGroup
+                  - InstanceGroup
                   - PrivateIps
 Metadata:
   ALIYUN::ROS::Interface:
@@ -259,31 +438,24 @@ Metadata:
           - PayPeriodUnit
           - PayPeriod
         Label:
-          default:
-            en: PayType Configuration
-            zh-cn: 付费类型配置
+          default: 付费类型配置
       - Parameters:
           - EcsInstanceType
-          - SystemDiskCategory
-          - SystemDiskSize
           - InstancePassword
+          - EnablePublicIp
         Label:
-          default:
-            zh-cn: ECS实例配置
-            en: ECS Instance Configuration
+          default: 资源配置
+      - Parameters:
+          - SUPABASE_USER
+          - SUPABASE_PASSWORD
+        Label:
+          default: 数据库配置
       - Parameters:
           - ZoneId
-        Label:
-          default:
-            zh-cn: 可用区配置
-            en: Zone Configuration
-      - Parameters:
-          - WhetherCreateVpc
-          - VpcCidrBlock
-          - VSwitchCidrBlock
+          - VpcOption
           - VpcId
           - VSwitchId
+          - VpcCidrBlock
+          - VSwitchCidrBlock
         Label:
-          default:
-            zh-cn: 选择已有基础资源配置
-            en: Choose existing Infrastructure Configuration
+          default: 可用区配置
