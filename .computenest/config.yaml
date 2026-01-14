@@ -55,9 +55,6 @@ Artifact:
       CommandContent: |-
         #!/bin/bash
         # 升级基础组件：
-        yum check-update
-        yum -y upgrade --security
-        yum -y upgrade-minimal
 
         # 安装docker-ce
         yum-config-manager --add-repo http://mirrors.aliyun.com/docker-ce/linux/centos/docker-ce.repo
