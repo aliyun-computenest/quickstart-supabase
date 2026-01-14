@@ -4,8 +4,8 @@ Service:
     SupplierDeployMetadata:
       ArtifactRelation:
         centos_7:
-          ArtifactId: ${Artifact.Artifact_1.ArtifactId}
-          ArtifactVersion: ${Artifact.Artifact_1.ArtifactVersion}
+          ArtifactId: ${Artifact.EcsImage.ArtifactId}
+          ArtifactVersion: draft
       SupplierTemplateConfigs:
         - Name: 单机版
           Url: ros_templates/template.yaml
@@ -34,24 +34,21 @@ Service:
   ShareType: Public
   ApprovalType: Manual
 Artifact:
-  Artifact_1:
+  EcsImage:
     ArtifactType: EcsImage
     ArtifactName: Supabase
     Description: Supabase
-    ArtifactProperty:
-      RegionId: ${ImageBuilder.EcsImage.RegionId}
-      ImageId: ${ImageBuilder.EcsImage.SourceImageId}
-ImageBuilder:
-  EcsImage:
-    RegionId: ap-southeast-1
-    SourceImageId: aliyun_3_x64_20G_alibase_20240819.vhd
-    SystemDiskSize: 40
-    InstanceType: ecs.e-c1m2.2xlarge
-    InternetMaxBandwidthOut: 100
-    CommandType: RunShellScript
-    Timeout: 10800
-    Tags: [ ]
-    CommandContent: |-
+    SupportRegionIds:
+        - ap-southeast-1
+    ArtifactBuildProperty:
+      CodeRepo:
+        Platform: github
+        Owner: LYH-RAIN
+        RepoName: aliyun-computenest/quickstart-LobeChat
+        Branch: main
+      RegionId: ap-southeast-1
+      CommandType: RunShellScript
+      CommandContent: |-
         #!/bin/bash
         # 升级基础组件：
         yum check-update
