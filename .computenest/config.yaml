@@ -10,10 +10,14 @@ Service:
         - Name: 单机版
           Url: ros_templates/template.yaml
           PredefinedParameters: []
+          AllowedRegions:
+            - ap-southeast-1
     TemplateConfigs:
       - Name: 单机版
         Url: ros_templates/template.yaml
         PredefinedParameters: []
+        AllowedRegions:
+          - ap-southeast-1
     NetworkMetadata:
       EnablePrivateVpcConnection: false
       EnableReversePrivateVpcConnection: false
