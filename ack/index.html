@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="x-ua-compatible" content="ie=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+  <meta name="description" content="计算巢是阿里云开放给企业应用服务商的服务管理平台。服务商能够在计算巢上发布私有化部署服务，为其客户提供云上软件一键部署的能力；同时也支持全托管模式的服务，赋能服务商托管其客户资源。">
+  <title>开源 Supabase 配置指南 - Aliyun 计算巢 x Demo</title>
+
+  <link rel="shortcut icon" href="../img/favicon.ico">
+
+  <link rel="stylesheet" href="https://unpkg.com/purecss@1.0.0/build/pure-min.css">
+  <link rel="stylesheet" href="../css/theme.css">
+  
+
+  
+
+  
+  
+
+  
+    <script src="../search/main.js"></script>
+  
+
+  
+
+  <script src="../js/highlight.min.js"></script>
+  <script>hljs.highlightAll();</script>
+</head>
+
+<body>
+  <div class="container">
+    <div class="nav">
+      <div class="nav-inner">
+        <div class="logo">
+          <img src="./img/logo-2x.png">
+        </div>
+        <div class="nav-list">
+          <ul>
+          
+              <li><a href="#supabase">开源 Supabase 配置指南</a></li>
+              
+                  <li><a href="#_1">一、部署参数</a></li>
+                  
+                      <li class="li-h3"><a href="#manager-supabase">Manager 模板参数（接入开源 Supabase）</a></li>
+                  
+              
+                  <li><a href="#_2">二、集群配置命令</a></li>
+                  
+                      <li class="li-h3"><a href="#site-url-manager">设置 Site URL（部署 Manager 后必做）</a></li>
+                  
+                      <li class="li-h3"><a href="#smtp">配置 SMTP（启用邮箱认证）</a></li>
+                  
+                      <li class="li-h3"><a href="#saml">手动开启 SAML</a></li>
+                  
+                      <li class="li-h3"><a href="#_3">查看当前配置</a></li>
+                  
+              
+                  <li><a href="#ackacs">三、通过 ACK/ACS 控制台修改配置</a></li>
+                  
+              
+                  <li><a href="#manager">四、Manager 控制台配置</a></li>
+                  
+                      <li class="li-h3"><a href="#site-url">设置 Site URL</a></li>
+                  
+                      <li class="li-h3"><a href="#saml-sso">配置 SAML SSO</a></li>
+                  
+                      <li class="li-h3"><a href="#oauth">配置 OAuth</a></li>
+                  
+                      <li class="li-h3"><a href="#_4">配置邮箱认证</a></li>
+                  
+              
+          
+          </ul>
+        </div>
+      </div>
+    </div>
+    <div class="content theme-github">
+      
+      <div class="content-inner">        
+        
+        <h1 id="supabase">开源 Supabase 配置指南</h1>
+<h2 id="_1">一、部署参数</h2>
+<table>
+<thead>
+<tr>
+<th>参数</th>
+<th>必填</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>ClusterId</code></td>
+<td>是（仅已有集群版）</td>
+<td>ACK 集群 ID</td>
+</tr>
+<tr>
+<td><code>DeploymentNamespace</code></td>
+<td>否</td>
+<td>部署命名空间，留空用栈名</td>
+</tr>
+<tr>
+<td><code>DashboardUsername</code></td>
+<td>是</td>
+<td>Studio 控制台用户名</td>
+</tr>
+<tr>
+<td><code>DashboardPassword</code></td>
+<td>是</td>
+<td>Studio 控制台密码</td>
+</tr>
+<tr>
+<td><code>DbPassword</code></td>
+<td>是</td>
+<td>PostgreSQL 密码，仅字母数字</td>
+</tr>
+<tr>
+<td><code>JwtSecret</code></td>
+<td>是</td>
+<td>JWT 密钥，≥32 位</td>
+</tr>
+<tr>
+<td><code>OAuthProvider</code></td>
+<td>否</td>
+<td><code>none</code> / <code>github</code> / <code>google</code></td>
+</tr>
+<tr>
+<td><code>OAuthClientId</code></td>
+<td>选 OAuth 时必填</td>
+<td>OAuth App Client ID</td>
+</tr>
+<tr>
+<td><code>OAuthClientSecret</code></td>
+<td>选 OAuth 时必填</td>
+<td>OAuth App Client Secret</td>
+</tr>
+<tr>
+<td><code>EnableSaml</code></td>
+<td>否</td>
+<td><code>true</code> / <code>false</code>（默认 false）</td>
+</tr>
+<tr>
+<td><code>SamlIdpMetadataUrl</code></td>
+<td>开 SAML 时必填</td>
+<td>IdP Metadata URL</td>
+</tr>
+<tr>
+<td><code>SamlDomain</code></td>
+<td>开 SAML 时必填</td>
+<td>登录邮箱域名</td>
+</tr>
+</tbody>
+</table>
+<h3 id="manager-supabase">Manager 模板参数（接入开源 Supabase）</h3>
+<p><code>SupabaseDeploymentMode</code> 选 <code>UseExistingOpenSource</code>，填写：</p>
+<table>
+<thead>
+<tr>
+<th>参数</th>
+<th>说明</th>
+<th>来源</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>ExistingSupabaseUrl</code></td>
+<td>公网地址，如 <code>http://IP:8000</code></td>
+<td>Supabase 输出 <code>SupabaseUrl</code></td>
+</tr>
+<tr>
+<td><code>ExistingSupabaseInternalUrl</code></td>
+<td>集群内网地址</td>
+<td>Supabase 输出 <code>InternalUrl</code></td>
+</tr>
+<tr>
+<td><code>ExistingSupabaseAnonKey</code></td>
+<td>Anon Key</td>
+<td>Supabase 输出 <code>AnonKey</code></td>
+</tr>
+<tr>
+<td><code>ExistingSupabaseServiceRoleKey</code></td>
+<td>Service Role Key</td>
+<td>Supabase 输出 <code>ServiceRoleKey</code></td>
+</tr>
+<tr>
+<td><code>ExistingSupabaseDatabaseUrl</code></td>
+<td>数据库连接串</td>
+<td>Supabase 输出 <code>DatabaseUrl</code></td>
+</tr>
+</tbody>
+</table>
+<h2 id="_2">二、集群配置命令</h2>
+<p>以下命令中 <code>&lt;ns&gt;</code> 替换为 Supabase 所在的 namespace。</p>
+<h3 id="site-url-manager">设置 Site URL（部署 Manager 后必做）</h3>
+<pre><code class="language-bash">kubectl -n &lt;ns&gt; set env deployment/supabase-supabase-auth \
+  GOTRUE_SITE_URL=&quot;http://&lt;Manager-IP&gt;:8080&quot; \
+  GOTRUE_URI_ALLOW_LIST=&quot;http://&lt;Manager-IP&gt;:8080/&quot;
+kubectl -n &lt;ns&gt; rollout restart deployment/supabase-supabase-auth
+</code></pre>
+<h3 id="smtp">配置 SMTP（启用邮箱认证）</h3>
+<pre><code class="language-bash">kubectl -n &lt;ns&gt; set env deployment/supabase-supabase-auth \
+  GOTRUE_SMTP_HOST=&quot;smtp.example.com&quot; \
+  GOTRUE_SMTP_PORT=&quot;465&quot; \
+  GOTRUE_SMTP_USER=&quot;noreply@example.com&quot; \
+  GOTRUE_SMTP_PASS=&quot;&lt;密码或授权码&gt;&quot; \
+  GOTRUE_SMTP_SENDER_NAME=&quot;Agent Manager&quot; \
+  GOTRUE_SMTP_ADMIN_EMAIL=&quot;noreply@example.com&quot; \
+  GOTRUE_MAILER_AUTOCONFIRM=&quot;false&quot;
+kubectl -n &lt;ns&gt; rollout restart deployment/supabase-supabase-auth
+</code></pre>
+<h3 id="saml">手动开启 SAML</h3>
+<p>模板部署时设 <code>EnableSaml=true</code> 会自动完成以下步骤。手动维护时：</p>
+<pre><code class="language-bash"># 1. 生成私钥
+openssl genrsa 2048 | openssl rsa -traditional -outform DER | base64 | tr -d '\n' &gt; /tmp/saml-key.txt
+
+# 2. 写入 GoTrue
+kubectl -n &lt;ns&gt; set env deployment/supabase-supabase-auth \
+  GOTRUE_SAML_ENABLED=true \
+  GOTRUE_SAML_PRIVATE_KEY=&quot;$(cat /tmp/saml-key.txt)&quot; \
+  GOTRUE_SAML_EXTERNAL_URL=&quot;http://&lt;Supabase-IP&gt;:8000/auth/v1&quot; \
+  API_EXTERNAL_URL=&quot;http://&lt;Supabase-IP&gt;:8000/auth/v1&quot;
+kubectl -n &lt;ns&gt; rollout restart deployment/supabase-supabase-auth
+
+# 3. 注册 SAML Provider
+curl -X POST &quot;http://&lt;Supabase-IP&gt;:8000/auth/v1/admin/sso/providers&quot; \
+  -H &quot;apikey: &lt;ServiceRoleKey&gt;&quot; \
+  -H &quot;Authorization: Bearer &lt;ServiceRoleKey&gt;&quot; \
+  -H &quot;Content-Type: application/json&quot; \
+  -d '{&quot;type&quot;:&quot;saml&quot;,&quot;metadata_url&quot;:&quot;&lt;IdP-Metadata-URL&gt;&quot;,&quot;domains&quot;:[&quot;example.com&quot;],&quot;attribute_mapping&quot;:{&quot;keys&quot;:{&quot;email&quot;:{&quot;name&quot;:&quot;email&quot;}}}}'
+</code></pre>
+<p>IdP 侧填写：
+- <strong>Entity ID / Metadata URL</strong>: <code>http://&lt;Supabase-IP&gt;:8000/auth/v1/sso/saml/metadata</code>
+- <strong>ACS URL</strong>: <code>http://&lt;Supabase-IP&gt;:8000/auth/v1/sso/saml/acs</code></p>
+<h3 id="_3">查看当前配置</h3>
+<pre><code class="language-bash"># GoTrue 环境变量
+kubectl -n &lt;ns&gt; get deployment supabase-supabase-auth \
+  -o jsonpath='{range .spec.template.spec.containers[0].env[*]}{.name}={.value}{&quot;\n&quot;}{end}' \
+  | grep -iE 'SITE_URL|SMTP|SAML|MAILER|EXTERNAL_URL'
+
+# Auth Settings API
+curl -s &quot;http://&lt;Supabase-IP&gt;:8000/auth/v1/settings&quot; -H &quot;apikey: &lt;AnonKey&gt;&quot; | python3 -m json.tool
+</code></pre>
+<h2 id="ackacs">三、通过 ACK/ACS 控制台修改配置</h2>
+<p>不习惯 <code>kubectl</code> 命令行的用户，可以在阿里云容器服务控制台操作：</p>
+<ol>
+<li>登录 <a href="https://cs.console.aliyun.com/">ACK 控制台</a> 或 <a href="https://acs.console.aliyun.com/">ACS 控制台</a>，进入对应集群。</li>
+<li>
+<p>左侧导航 <strong>工作负载</strong> → <strong>无状态（Deployments）</strong>，选择 Supabase 所在的命名空间。找到 <code>supabase-supabase-auth</code>，点击名称进入详情。</p>
+<p><img alt="image.png" src="../ack_1.jpg" /></p>
+</li>
+<li>
+<p>点击右上角 <strong>编辑</strong> → <strong>环境变量</strong>，可直接添加或修改以下变量：</p>
+</li>
+<li><code>GOTRUE_SITE_URL</code> — Manager 公网地址</li>
+<li><code>GOTRUE_URI_ALLOW_LIST</code> — Manager 公网地址</li>
+<li><code>GOTRUE_SMTP_HOST</code> / <code>GOTRUE_SMTP_PORT</code> / <code>GOTRUE_SMTP_USER</code> / <code>GOTRUE_SMTP_PASS</code> — SMTP 配置</li>
+<li><code>GOTRUE_SMTP_SENDER_NAME</code> / <code>GOTRUE_SMTP_ADMIN_EMAIL</code> — 发件人信息</li>
+<li><code>GOTRUE_MAILER_AUTOCONFIRM</code> — 设为 <code>false</code> 开启邮箱验证</li>
+<li><code>GOTRUE_SAML_ENABLED</code> / <code>GOTRUE_SAML_PRIVATE_KEY</code> — SAML 配置</li>
+<li>
+<p><code>GOTRUE_SAML_EXTERNAL_URL</code> / <code>API_EXTERNAL_URL</code> — 设为 <code>http://&lt;Supabase-IP&gt;:8000/auth/v1</code></p>
+<p><img alt="image.png" src="../ack_2.jpg" /></p>
+</li>
+<li>
+<p>保存后 Deployment 会自动滚动更新，等待新 Pod Running 即可。</p>
+</li>
+</ol>
+<h2 id="manager">四、Manager 控制台配置</h2>
+<p>部署完成后在 Manager 管理后台操作：</p>
+<h3 id="site-url">设置 Site URL</h3>
+<p><strong>路径：</strong> <code>/admin/sso-config</code> → 回调地址配置</p>
+<p>界面保存会返回 501，需通过 <code>kubectl set env</code> 或 ACK/ACS 控制台设置 <code>GOTRUE_SITE_URL</code>（见上文）。</p>
+<h3 id="saml-sso">配置 SAML SSO</h3>
+<p><strong>路径：</strong> <code>/admin/sso-config</code></p>
+<ol>
+<li>页面会显示 SP 信息（Entity ID、ACS URL），复制到 IdP 侧配置应用。</li>
+<li>在 IdP 获取 Metadata URL 后，点击「添加 SSO 配置」，填入 IdP Metadata URL 和邮箱域名。</li>
+<li>在页面顶部「登录模式」下拉选 <code>saml</code>，保存。</li>
+</ol>
+<h3 id="oauth">配置 OAuth</h3>
+<p><strong>路径：</strong> <code>/admin/sso-config</code></p>
+<ol>
+<li>在第三方平台（GitHub / Google 等）创建 OAuth App，回调地址填 <code>http://&lt;Supabase-IP&gt;:8000/auth/v1/callback</code>。</li>
+<li>在 Supabase Studio 控制台（<code>http://&lt;Supabase-IP&gt;:8000</code>）→ Authentication → Providers，启用对应 Provider 并填入 Client ID / Secret。</li>
+<li>回到 Manager <code>/admin/sso-config</code>，点击刷新，确认 Provider 状态为已启用。</li>
+<li>登录模式选 <code>oauth</code>，保存。</li>
+</ol>
+<h3 id="_4">配置邮箱认证</h3>
+<p><strong>路径：</strong> <code>/admin/email-auth</code></p>
+<p>界面开关不可用（返回 501），需通过 <code>kubectl set env</code> 或 ACK/ACS 控制台配置 SMTP 环境变量（见上文）。配置完成后界面会自动检测到 SMTP 已配置和邮箱认证已开启。</p>
+        
+      </div>
+
+      <div class="copyrights">© 2009-2022 Aliyun.com 版权所有</div>
+    </div>
+  </div>
+  
+  <!--
+  MkDocs version      : 1.6.1
+  Docs Build Date UTC : 2026-05-28 10:03:52.090200+00:00
+  -->
+</body>
+</html>
