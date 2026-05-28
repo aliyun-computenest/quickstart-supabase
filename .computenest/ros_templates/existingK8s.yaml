@@ -1,0 +1,775 @@
+ROSTemplateFormatVersion: '2015-09-01'
+Description:
+  en: Deploy Supabase on an existing ACK Kubernetes cluster
+  zh-cn: 在已有ACK Kubernetes集群上部署Supabase
+
+Parameters:
+  ClusterId:
+    Type: String
+    Label:
+      en: ACK Cluster ID
+      zh-cn: ACK集群ID
+    Description:
+      en: The ID of an existing ACK cluster to deploy Supabase
+      zh-cn: 用于部署Supabase的已有ACK集群ID
+    AssociationProperty: ALIYUN::CS::Cluster::ClusterId
+    Required: true
+
+  DashboardUsername:
+    Type: String
+    Label:
+      zh-cn: Supabase 控制台账户
+      en: Supabase Dashboard Username
+    Default: supabase
+
+  DashboardPassword:
+    NoEcho: true
+    Type: String
+    Label:
+      zh-cn: Supabase 控制台密码
+      en: Supabase Dashboard Password
+    MinLength: 8
+    MaxLength: 30
+    AssociationProperty: ALIYUN::ECS::Instance::Password
+
+  DbPassword:
+    NoEcho: true
+    Type: String
+    Label:
+      zh-cn: 数据库密码
+      en: PostgreSQL Database Password
+    Description:
+      zh-cn: 只能包含大小写字母和数字，不允许特殊字符
+      en: Only letters and digits are allowed, no special characters
+    MinLength: 8
+    MaxLength: 30
+    AllowedPattern: '[A-Za-z0-9]+'
+    AssociationProperty: AutoCompleteInput
+    AssociationPropertyMetadata:
+      Length: 16
+      CharacterClasses:
+        - Class: lowercase
+          min: 4
+        - Class: uppercase
+          min: 4
+        - Class: digits
+          min: 4
+
+  JwtSecret:
+    Type: String
+    NoEcho: true
+    Label:
+      zh-cn: JWT 密钥（至少32位）
+      en: JWT Secret (at least 32 characters)
+    AssociationProperty: AutoCompleteInput
+    AssociationPropertyMetadata:
+      Length: 32
+      CharacterClasses:
+        - Class: lowercase
+          min: 10
+        - Class: uppercase
+          min: 10
+        - Class: digits
+          min: 6
+
+  DeploymentNamespace:
+    Type: String
+    Label:
+      zh-cn: 部署命名空间
+      en: Deployment Namespace
+    Description:
+      zh-cn: 指定 Supabase 部署到哪个 Kubernetes 命名空间。留空则使用 ROS 栈名（${ALIYUN::StackName}）。
+      en: Kubernetes namespace where Supabase is deployed. Leave empty to use the ROS stack namespace.
+    Default: ''
+
+  OAuthProvider:
+    Type: String
+    Label:
+      zh-cn: OAuth 登录方式
+      en: OAuth Provider
+    Description:
+      zh-cn: 选择要启用的 OAuth Provider。选择 GitHub 或 Google 后填写同一组 Client ID 和 Client Secret；部署完成后将输出 OAuthCallbackUrl，需要配置到对应 OAuth App 的回调地址里。
+      en: Select the OAuth provider to enable. When GitHub or Google is selected, provide the shared Client ID and Client Secret fields. After deployment, set the output OAuthCallbackUrl as the callback URL in the selected OAuth app.
+    Default: none
+    AllowedValues:
+      - none
+      - github
+      - google
+    AssociationPropertyMetadata:
+      ValueLabelMapping:
+        none:
+          zh-cn: 不启用
+          en: Disabled
+        github:
+          zh-cn: GitHub
+          en: GitHub
+        google:
+          zh-cn: Google
+          en: Google
+
+  OAuthClientId:
+    Type: String
+    Label:
+      zh-cn: OAuth Client ID
+      en: OAuth Client ID
+    Description:
+      zh-cn: 从所选 Provider 的 OAuth App 获取。GitHub 在 Developer settings > OAuth Apps；Google 在 Google Cloud Console > APIs & Services > Credentials。回调地址填模板输出的 OAuthCallbackUrl。
+      en: Get this from the selected provider's OAuth app. For GitHub, use Developer settings > OAuth Apps. For Google, use Google Cloud Console > APIs & Services > Credentials. Set the callback URL to the template output OAuthCallbackUrl.
+    Default: ''
+    AssociationPropertyMetadata:
+      Visible:
+        Condition:
+          Fn::Not:
+            Fn::Equals:
+              - ${OAuthProvider}
+              - none
+
+  OAuthClientSecret:
+    NoEcho: true
+    Type: String
+    Label:
+      zh-cn: OAuth Client Secret
+      en: OAuth Client Secret
+    Description:
+      zh-cn: 从所选 Provider 的 OAuth App 复制 Client Secret。该值只在服务端使用，请勿公开。
+      en: Copy this from the selected provider's OAuth app. It is server-side only and must be kept private.
+    Default: ''
+    AssociationPropertyMetadata:
+      Visible:
+        Condition:
+          Fn::Not:
+            Fn::Equals:
+              - ${OAuthProvider}
+              - none
+
+  EnableSaml:
+    Type: String
+    Label:
+      zh-cn: 启用 SAML SSO
+      en: Enable SAML SSO
+    Description:
+      zh-cn: 启用后需要填写 IdP Metadata URL 和登录邮箱域名。模板会在集群后置配置 Job 中复用或生成 SAML 私钥并写入 GoTrue。
+      en: When enabled, provide the IdP Metadata URL and login email domain. The post-config Job reuses or generates the SAML private key in the cluster and writes it to GoTrue.
+    Default: 'false'
+    AllowedValues:
+      - 'true'
+      - 'false'
+
+  SamlIdpMetadataUrl:
+    Type: String
+    Label:
+      zh-cn: SAML IdP Metadata URL
+      en: SAML IdP Metadata URL
+    Description:
+      zh-cn: 从企业 IdP 应用获取的 Metadata URL，Supabase Auth 需要能访问该地址。若 IdP 只能导出 metadata XML，请先不启用模板自动注册，部署后手动调用 Auth Admin API 传 metadata_xml。
+      en: Metadata URL from the enterprise IdP app. Supabase Auth must be able to reach it. If the IdP only exports metadata XML, skip template auto-registration and call the Auth Admin API with metadata_xml after deployment.
+    Default: ''
+    AssociationPropertyMetadata:
+      Visible:
+        Condition:
+          Fn::Equals:
+            - ${EnableSaml}
+            - 'true'
+
+  SamlDomain:
+    Type: String
+    Label:
+      zh-cn: SAML 登录邮箱域名
+      en: SAML Login Email Domain
+    Description:
+      zh-cn: 用于 Supabase SSO provider discovery 的邮箱域名，例如 example.com。用户使用该域名邮箱登录时会匹配到这个 SAML Provider。
+      en: Email domain used by Supabase SSO provider discovery, for example example.com. Users signing in with this email domain will match this SAML provider.
+    Default: ''
+    AssociationPropertyMetadata:
+      Visible:
+        Condition:
+          Fn::Equals:
+            - ${EnableSaml}
+            - 'true'
+
+Conditions:
+  GithubOAuthCondition:
+    Fn::Equals:
+      - Ref: OAuthProvider
+      - github
+  GoogleOAuthCondition:
+    Fn::Equals:
+      - Ref: OAuthProvider
+      - google
+  EnableSamlCondition:
+    Fn::Equals:
+      - Ref: EnableSaml
+      - 'true'
+  UseDefaultNamespace:
+    Fn::Equals:
+      - Ref: DeploymentNamespace
+      - ''
+
+Rules:
+  OAuthClientIdRequired:
+    RuleCondition:
+      Fn::Not:
+        Fn::Equals:
+          - Ref: OAuthProvider
+          - none
+    Assertions:
+      - Assert:
+          Fn::Not:
+            Fn::Equals:
+              - Ref: OAuthClientId
+              - ''
+        AssertDescription: OAuth Client ID is required when OAuth Provider is GitHub or Google.
+
+  OAuthClientSecretRequired:
+    RuleCondition:
+      Fn::Not:
+        Fn::Equals:
+          - Ref: OAuthProvider
+          - none
+    Assertions:
+      - Assert:
+          Fn::Not:
+            Fn::Equals:
+              - Ref: OAuthClientSecret
+              - ''
+        AssertDescription: OAuth Client Secret is required when OAuth Provider is GitHub or Google.
+
+  SamlIdpMetadataUrlRequired:
+    RuleCondition:
+      Fn::Equals:
+        - Ref: EnableSaml
+        - 'true'
+    Assertions:
+      - Assert:
+          Fn::Not:
+            Fn::Equals:
+              - Ref: SamlIdpMetadataUrl
+              - ''
+        AssertDescription: SAML IdP Metadata URL is required when SAML SSO is enabled.
+
+  SamlDomainRequired:
+    RuleCondition:
+      Fn::Equals:
+        - Ref: EnableSaml
+        - 'true'
+    Assertions:
+      - Assert:
+          Fn::Not:
+            Fn::Equals:
+              - Ref: SamlDomain
+              - ''
+        AssertDescription: SAML login email domain is required when SAML SSO is enabled.
+
+Resources:
+  SupabaseComputenestHelmApplication:
+    Type: MODULE::ACS::ComputeNest::FluxOciHelmDeploy
+    Version: default
+    Properties:
+      ClusterId:
+        Ref: ClusterId
+      HelmChartUrl: 'oci://compute-nest-chart-registry.cn-hangzhou.cr.aliyuncs.com/computenest/supabase:0.5.6'
+      DockerConfigJson: 'eyJhdXRocyI6eyJjb21wdXRlLW5lc3QtY2hhcnQtcmVnaXN0cnkuY24taGFuZ3pob3UuY3IuYWxpeXVuY3MuY29tIjp7InVzZXJuYW1lIjoiY3JfdGVtcF91c2VyIiwicGFzc3dvcmQiOiJleUpoZFhSb1ZHOXJaVzVKWkdWdWRHbG1hV1Z5SWpvaU5EQTJNVFE0WkdJd1pUVTRZekV5TmprNFpXSTFNVEE0T1RnNE5XVTVNbU5tTVRZeVpHTmlNR0pqT0dJeFpUYzVaREEzWWprNE1tTmxaR0kzT1dVMVlpSXNJbWx1YzNSaGJtTmxTV1FpT2lKamNta3RiVGxyWjNCMFlUa3dkamgwWkcxamF5SXNJblJwYldVaU9pSXhOemM1T0Rrd016UTFNREF3SWl3aWRIbHdaU0k2SW5OMGN5SXNJblZ6WlhKSlpDSTZJakV4TVRrNE1qRXhOVFk0T1RNNE9ESWlmUTo0MTc0MmE0NWUzZGQ1M2YwNmE2ZDhjNGM0ZDRlMjNlODhiYzAxNjVlIiwiYXV0aCI6IlkzSmZkR1Z0Y0Y5MWMyVnlPbVY1U21oa1dGSnZWa2M1Y2xwWE5VcGFSMVoxWkVkc2JXRlhWbmxKYW05cFRrUkJNazFVVVRSYVIwbDNXbFJWTkZsNlJYbE9hbXMwV2xkSk1VMVVRVFJQVkdjMFRsZFZOVTF0VG0xTlZGbDVXa2RPYVUxSFNtcFBSMGw0V2xSak5WcEVRVE5aYW1zMFRXMU9iRnBIU1ROUFYxVXhXV2xKYzBsdGJIVmpNMUpvWW0xT2JGTlhVV2xQYVVwcVkyMXJkR0pVYkhKYU0wSXdXVlJyZDJScWFEQmFSekZxWVhsSmMwbHVVbkJpVjFWcFQybEplRTU2WXpWUFJHdDNUWHBSTVUxRVFYZEphWGRwWkVoc2QxcFRTVFpKYms0d1kzbEpjMGx1Vm5wYVdFcEtXa05KTmtscVJYaE5WR3MwVFdwRmVFNVVXVFJQVkUwMFQwUkphV1pST2pReE56UXlZVFExWlROa1pEVXpaakEyWVRaa09HTTBZelJrTkdVeU0yVTRPR0pqTURFMk5XVT0ifX19'
+      ChartValues:
+        secret:
+          dashboard:
+            username:
+              Ref: DashboardUsername
+            password:
+              Ref: DashboardPassword
+          db:
+            password:
+              Ref: DbPassword
+          jwt:
+            secret:
+              Ref: JwtSecret
+            autoGenerate: true
+        persistence:
+          db:
+            storageClassName: alicloud-disk-topology-alltype
+            size: 20Gi
+          storage:
+            storageClassName: alicloud-disk-topology-alltype
+            size: 20Gi
+          functions:
+            enabled: false
+          imgproxy:
+            storageClassName: alicloud-disk-topology-alltype
+            size: 20Gi
+          snippets:
+            enabled: false
+          deno:
+            enabled: false
+          minio:
+            storageClassName: alicloud-disk-topology-alltype
+            size: 20Gi
+        environment:
+          analytics:
+            DB_HOST: supabase-supabase-db
+            DB_PORT: 5432
+          studio:
+            POSTGRES_HOST: supabase-supabase-db
+            POSTGRES_PORT: '5432'
+            POSTGRES_DB: postgres
+          auth:
+            DB_PORT: 5432
+            GOTRUE_EXTERNAL_GITHUB_ENABLED:
+              Fn::If:
+                - GithubOAuthCondition
+                - 'true'
+                - 'false'
+            GOTRUE_EXTERNAL_GITHUB_CLIENT_ID:
+              Ref: OAuthClientId
+            GOTRUE_EXTERNAL_GITHUB_SECRET:
+              Ref: OAuthClientSecret
+            GOTRUE_EXTERNAL_GOOGLE_ENABLED:
+              Fn::If:
+                - GoogleOAuthCondition
+                - 'true'
+                - 'false'
+            GOTRUE_EXTERNAL_GOOGLE_CLIENT_ID:
+              Ref: OAuthClientId
+            GOTRUE_EXTERNAL_GOOGLE_SECRET:
+              Ref: OAuthClientSecret
+            GOTRUE_SAML_ENABLED: 'false'
+            GOTRUE_SAML_PRIVATE_KEY: ''
+        service:
+          kong:
+            type: LoadBalancer
+        deployment:
+          analytics:
+            enabled: true
+          vector:
+            enabled: false
+        image:
+          analytics:
+            repository: compute-nest-registry.cn-hangzhou.cr.aliyuncs.com/computenest/logflare
+            tag: '1.36.1'
+          auth:
+            repository: compute-nest-registry.cn-hangzhou.cr.aliyuncs.com/computenest/gotrue
+            tag: v2.186.0
+          db:
+            repository: compute-nest-registry.cn-hangzhou.cr.aliyuncs.com/computenest/postgres
+            tag: 15.8.1.085
+          functions:
+            repository: compute-nest-registry.cn-hangzhou.cr.aliyuncs.com/computenest/edge-runtime
+            tag: v1.71.2
+          imgproxy:
+            repository: compute-nest-registry.cn-hangzhou.cr.aliyuncs.com/computenest/imgproxy
+            tag: v3.30.1
+          kong:
+            repository: compute-nest-registry.cn-hangzhou.cr.aliyuncs.com/computenest/kong
+            tag: 3.9.1
+          meta:
+            repository: compute-nest-registry.cn-hangzhou.cr.aliyuncs.com/computenest/postgres-meta
+            tag: v0.96.3
+          minio:
+            repository: compute-nest-registry.cn-hangzhou.cr.aliyuncs.com/computenest/minio
+            tag: latest
+          realtime:
+            repository: compute-nest-registry.cn-hangzhou.cr.aliyuncs.com/computenest/realtime
+            tag: v2.76.5
+          rest:
+            repository: compute-nest-registry.cn-hangzhou.cr.aliyuncs.com/computenest/postgrest
+            tag: v14.8
+          storage:
+            repository: compute-nest-registry.cn-hangzhou.cr.aliyuncs.com/computenest/storage-api
+            tag: v1.48.26
+          studio:
+            repository: compute-nest-registry.cn-hangzhou.cr.aliyuncs.com/computenest/studio
+            tag: 2026.04.27
+          vector:
+            repository: compute-nest-registry.cn-hangzhou.cr.aliyuncs.com/computenest/vector
+            tag: 0.53.0
+          jwtInit:
+            repository: compute-nest-registry.cn-hangzhou.cr.aliyuncs.com/computenest/python
+            tag: '3.12'
+      Namespace:
+        Fn::If:
+          - UseDefaultNamespace
+          - Ref: ALIYUN::StackName
+          - Ref: DeploymentNamespace
+      ReleaseName: supabase
+      WaitUntil:
+        - Kind: Service
+          Name: supabase-supabase-kong
+          Namespace:
+            Fn::If:
+              - UseDefaultNamespace
+              - Ref: ALIYUN::StackName
+              - Ref: DeploymentNamespace
+          JsonPath: $.status.loadBalancer.ingress[0].ip
+          Operator: NotEmpty
+          FirstMatch: true
+          Timeout: 600
+        - Kind: ConfigMap
+          Name: supabase-jwt-output
+          Namespace:
+            Fn::If:
+              - UseDefaultNamespace
+              - Ref: ALIYUN::StackName
+              - Ref: DeploymentNamespace
+          JsonPath: $.data.anonKey
+          Operator: NotEmpty
+          FirstMatch: true
+          Timeout: 300
+        - Kind: ConfigMap
+          Name: supabase-jwt-output
+          Namespace:
+            Fn::If:
+              - UseDefaultNamespace
+              - Ref: ALIYUN::StackName
+              - Ref: DeploymentNamespace
+          JsonPath: $.data.serviceKey
+          Operator: NotEmpty
+          FirstMatch: true
+          Timeout: 300
+
+  SupabaseAuthPostConfig:
+    Type: ALIYUN::CS::ClusterApplication
+    DependsOn: SupabaseComputenestHelmApplication
+    Properties:
+      ClusterId:
+        Ref: ClusterId
+      DefaultNamespace:
+        Fn::If:
+          - UseDefaultNamespace
+          - Ref: ALIYUN::StackName
+          - Ref: DeploymentNamespace
+      YamlContent:
+        Fn::Sub:
+          - |
+            apiVersion: v1
+            kind: ServiceAccount
+            metadata:
+              name: supabase-auth-post-config
+              namespace: ${Namespace}
+            ---
+            apiVersion: rbac.authorization.k8s.io/v1
+            kind: Role
+            metadata:
+              name: supabase-auth-post-config
+              namespace: ${Namespace}
+            rules:
+              - apiGroups: ["apps"]
+                resources: ["deployments"]
+                verbs: ["get", "list", "watch", "patch", "update"]
+              - apiGroups: [""]
+                resources: ["configmaps"]
+                verbs: ["get", "patch", "update"]
+            ---
+            apiVersion: rbac.authorization.k8s.io/v1
+            kind: RoleBinding
+            metadata:
+              name: supabase-auth-post-config
+              namespace: ${Namespace}
+            subjects:
+              - kind: ServiceAccount
+                name: supabase-auth-post-config
+                namespace: ${Namespace}
+            roleRef:
+              apiGroup: rbac.authorization.k8s.io
+              kind: Role
+              name: supabase-auth-post-config
+            ---
+            apiVersion: batch/v1
+            kind: Job
+            metadata:
+              name: supabase-auth-post-config
+              namespace: ${Namespace}
+              labels:
+                app.kubernetes.io/name: supabase-auth-post-config
+            spec:
+              ttlSecondsAfterFinished: 3600
+              backoffLimit: 3
+              template:
+                metadata:
+                  labels:
+                    app.kubernetes.io/name: supabase-auth-post-config
+                spec:
+                  restartPolicy: OnFailure
+                  serviceAccountName: supabase-auth-post-config
+                  containers:
+                    - name: post-config
+                      image: registry-${ALIYUN::Region}-vpc.ack.aliyuncs.com/ack-demo/helm-kubectl:4.2
+                      imagePullPolicy: IfNotPresent
+                      command: ["/bin/sh", "-c"]
+                      args:
+                        - |
+                          set -euo pipefail
+
+                          NS="${Namespace}"
+                          PUBLIC_URL="http://${ServerAddress}:8000"
+                          PUBLIC_URL="$(printf '%s' "$PUBLIC_URL" | sed 's#/*$##')"
+                          AUTH_URL="$PUBLIC_URL/auth/v1"
+                          ADMIN_AUTH_URL="http://supabase-supabase-kong:8000/auth/v1"
+                          SITE_URL="$PUBLIC_URL"
+                          URI_ALLOW_LIST="$SITE_URL"
+
+                          kubectl -n "$NS" set env deployment/supabase-supabase-auth \
+                            API_EXTERNAL_URL="$AUTH_URL" \
+                            GOTRUE_SAML_EXTERNAL_URL="$AUTH_URL" \
+                            GOTRUE_SITE_URL="$SITE_URL" \
+                            GOTRUE_URI_ALLOW_LIST="$URI_ALLOW_LIST"
+
+                          if [ "${OAuthProvider}" = "github" ]; then
+                            kubectl -n "$NS" set env deployment/supabase-supabase-auth \
+                              GOTRUE_EXTERNAL_GITHUB_REDIRECT_URI="$AUTH_URL/callback"
+                          fi
+
+                          if [ "${OAuthProvider}" = "google" ]; then
+                            kubectl -n "$NS" set env deployment/supabase-supabase-auth \
+                              GOTRUE_EXTERNAL_GOOGLE_REDIRECT_URI="$AUTH_URL/callback"
+                          fi
+
+                          kubectl -n "$NS" rollout status deployment/supabase-supabase-auth --timeout=180s
+
+                          if [ "${EnableSaml}" = "true" ]; then
+                            TMP_DIR="$(mktemp -d)"
+
+                            SAML_PRIVATE_KEY="$(kubectl -n "$NS" get deployment supabase-supabase-auth \
+                              -o jsonpath='{range .spec.template.spec.containers[*].env[?(@.name=="GOTRUE_SAML_PRIVATE_KEY")]}{.value}{end}' || true)"
+
+                            if [ -z "$SAML_PRIVATE_KEY" ]; then
+                              if ! command -v openssl >/dev/null 2>&1; then
+                                echo "openssl is required by the post-config image to generate SAML private key"
+                                exit 1
+                              fi
+
+                              openssl genpkey -algorithm RSA -out "$TMP_DIR/saml.pem" >/dev/null 2>&1
+                              openssl rsa -in "$TMP_DIR/saml.pem" -traditional -outform DER -out "$TMP_DIR/saml.der" >/dev/null 2>&1
+                              SAML_PRIVATE_KEY="$(base64 "$TMP_DIR/saml.der" | tr -d '\n')"
+                              echo "Generated SAML private key in cluster"
+                            else
+                              echo "Using provided or existing SAML private key"
+                            fi
+
+                            kubectl -n "$NS" set env deployment/supabase-supabase-auth \
+                              GOTRUE_SAML_ENABLED=true \
+                              GOTRUE_SAML_PRIVATE_KEY="$SAML_PRIVATE_KEY" \
+                              GOTRUE_SAML_EXTERNAL_URL="$AUTH_URL" \
+                              API_EXTERNAL_URL="$AUTH_URL"
+                            kubectl -n "$NS" rollout status deployment/supabase-supabase-auth --timeout=180s
+
+                            kubectl -n "$NS" get configmap supabase-supabase-kong \
+                              -o jsonpath='{.data.kong\.yml}' > "$TMP_DIR/kong.yml"
+
+                            if grep -Eq 'http://auth:9999/sso/saml/(acs|metadata)|- /sso/saml/(acs|metadata)' "$TMP_DIR/kong.yml"; then
+                              sed -i \
+                                -e 's#http://auth:9999/sso/saml/acs#http://supabase-supabase-auth:9999/sso/saml/acs#g' \
+                                -e 's#http://auth:9999/sso/saml/metadata#http://supabase-supabase-auth:9999/sso/saml/metadata#g' \
+                                -e 's#- /sso/saml/acs#- /auth/v1/sso/saml/acs#g' \
+                                -e 's#- /sso/saml/metadata#- /auth/v1/sso/saml/metadata#g' \
+                                "$TMP_DIR/kong.yml"
+
+                              {
+                                printf 'data:\n  kong.yml: |\n'
+                                sed 's/^/    /' "$TMP_DIR/kong.yml"
+                              } > "$TMP_DIR/kong-patch.yaml"
+
+                              kubectl -n "$NS" patch configmap supabase-supabase-kong \
+                                --type merge \
+                                --patch-file "$TMP_DIR/kong-patch.yaml"
+                              kubectl -n "$NS" rollout restart deployment/supabase-supabase-kong
+                              kubectl -n "$NS" rollout status deployment/supabase-supabase-kong --timeout=180s
+                            else
+                              echo "supabase-supabase-kong SAML routes already patched"
+                            fi
+
+                            SERVICE_ROLE_KEY="$(kubectl -n "$NS" get configmap supabase-jwt-output -o jsonpath='{.data.serviceKey}')"
+                            SAML_IDP_METADATA_URL="${SamlIdpMetadataUrl}"
+                            SAML_DOMAIN="${SamlDomain}"
+
+                            if [ -z "$SAML_IDP_METADATA_URL" ] || [ -z "$SAML_DOMAIN" ]; then
+                              echo "SamlIdpMetadataUrl and SamlDomain are required when EnableSaml=true"
+                              exit 1
+                            fi
+
+                            if ! command -v curl >/dev/null 2>&1; then
+                              echo "curl is required by the post-config image to register SAML provider"
+                              exit 1
+                            fi
+
+                            EXISTING_PROVIDERS="$(curl -fsS \
+                              -H "apikey: $SERVICE_ROLE_KEY" \
+                              -H "Authorization: Bearer $SERVICE_ROLE_KEY" \
+                              "$ADMIN_AUTH_URL/admin/sso/providers" || true)"
+
+                            if printf '%s' "$EXISTING_PROVIDERS" | grep -F "\"$SAML_DOMAIN\"" >/dev/null 2>&1; then
+                              echo "SAML provider for domain $SAML_DOMAIN already exists"
+                            else
+                              HTTP_CODE="$(curl -sS -o "$TMP_DIR/saml-provider.out" -w '%{http_code}' \
+                                -X POST "$ADMIN_AUTH_URL/admin/sso/providers" \
+                                -H "apikey: $SERVICE_ROLE_KEY" \
+                                -H "Authorization: Bearer $SERVICE_ROLE_KEY" \
+                                -H "Content-Type: application/json" \
+                                -d "{\"type\":\"saml\",\"metadata_url\":\"$SAML_IDP_METADATA_URL\",\"domains\":[\"$SAML_DOMAIN\"],\"attribute_mapping\":{\"keys\":{\"email\":{\"name\":\"email\"}}}}")"
+
+                              if [ "$HTTP_CODE" != "200" ] && [ "$HTTP_CODE" != "201" ] && [ "$HTTP_CODE" != "409" ]; then
+                                cat "$TMP_DIR/saml-provider.out"
+                                echo "Failed to register SAML provider, HTTP $HTTP_CODE"
+                                exit 1
+                              fi
+                              echo "SAML provider registered for domain $SAML_DOMAIN"
+                            fi
+                          fi
+          - Namespace:
+              Fn::If:
+                - UseDefaultNamespace
+                - Ref: ALIYUN::StackName
+                - Ref: DeploymentNamespace
+            ServerAddress:
+              Fn::Select:
+                - 0
+                - Fn::GetAtt:
+                    - SupabaseComputenestHelmApplication
+                    - WaitUntilData
+            OAuthProvider:
+              Ref: OAuthProvider
+            EnableSaml:
+              Ref: EnableSaml
+            SamlIdpMetadataUrl:
+              Ref: SamlIdpMetadataUrl
+            SamlDomain:
+              Ref: SamlDomain
+      WaitUntil:
+        - Kind: Job
+          ApiVersion: batch/v1
+          Name: supabase-auth-post-config
+          Namespace:
+            Fn::If:
+              - UseDefaultNamespace
+              - Ref: ALIYUN::StackName
+              - Ref: DeploymentNamespace
+          JsonPath: $.status.completionTime
+          Operator: NotEmpty
+          Timeout: 300
+          FirstMatch: true
+
+Outputs:
+  SupabaseUrl:
+    Description:
+      zh-cn: Supabase 访问地址（API 网关 & Studio 控制台）
+      en: Supabase URL (API Gateway & Studio)
+    Value:
+      Fn::Sub:
+        - http://${ServerAddress}:8000
+        - ServerAddress:
+            Fn::Select:
+              - 0
+              - Fn::GetAtt:
+                  - SupabaseComputenestHelmApplication
+                  - WaitUntilData
+
+  OAuthCallbackUrl:
+    Description:
+      zh-cn: OAuth App 回调地址
+      en: OAuth App Callback URL
+    Value:
+      Fn::Sub:
+        - http://${ServerAddress}:8000/auth/v1/callback
+        - ServerAddress:
+            Fn::Select:
+              - 0
+              - Fn::GetAtt:
+                  - SupabaseComputenestHelmApplication
+                  - WaitUntilData
+
+  SamlMetadataUrl:
+    Description:
+      zh-cn: SAML SP Metadata 地址
+      en: SAML SP Metadata URL
+    Value:
+      Fn::Sub:
+        - http://${ServerAddress}:8000/auth/v1/sso/saml/metadata
+        - ServerAddress:
+            Fn::Select:
+              - 0
+              - Fn::GetAtt:
+                  - SupabaseComputenestHelmApplication
+                  - WaitUntilData
+
+  SamlAcsUrl:
+    Description:
+      zh-cn: SAML ACS 地址
+      en: SAML ACS URL
+    Value:
+      Fn::Sub:
+        - http://${ServerAddress}:8000/auth/v1/sso/saml/acs
+        - ServerAddress:
+            Fn::Select:
+              - 0
+              - Fn::GetAtt:
+                  - SupabaseComputenestHelmApplication
+                  - WaitUntilData
+
+  AnonKey:
+    Description:
+      zh-cn: Supabase Anon Key（公开 API 调用用）
+      en: Supabase Anon Key (for public API calls)
+    Value:
+      Fn::Select:
+        - 1
+        - Fn::GetAtt:
+            - SupabaseComputenestHelmApplication
+            - WaitUntilData
+
+  ServiceRoleKey:
+    Description:
+      zh-cn: Supabase Service Role Key（服务端管理用，请妥善保管）
+      en: Supabase Service Role Key (for server-side admin, keep secret)
+    Value:
+      Fn::Select:
+        - 2
+        - Fn::GetAtt:
+            - SupabaseComputenestHelmApplication
+            - WaitUntilData
+
+  InternalUrl:
+    Description:
+      zh-cn: Supabase 集群内网地址（部署 Manager 时填入 ExistingSupabaseInternalUrl）
+      en: Supabase internal K8s service URL (use as ExistingSupabaseInternalUrl when deploying Manager)
+    Value:
+      Fn::Sub:
+        - http://supabase-supabase-kong.${NS}.svc:8000
+        - NS:
+            Ref: DeploymentNamespace
+
+  DatabaseUrl:
+    Description:
+      zh-cn: Supabase 数据库连接地址（部署 Manager 时填入 ExistingSupabaseDatabaseUrl）
+      en: Supabase database connection URL (use as ExistingSupabaseDatabaseUrl when deploying Manager)
+    Value:
+      Fn::Sub:
+        - postgresql://postgres:${DbPwd}@supabase-supabase-db.${NS}.svc:5432/postgres
+        - NS:
+            Ref: DeploymentNamespace
+          DbPwd:
+            Ref: DbPassword
+
+Metadata:
+  ALIYUN::ROS::Interface:
+    ParameterGroups:
+      - Parameters:
+          - ClusterId
+          - DeploymentNamespace
+        Label:
+          en: Kubernetes Configuration
+          zh-cn: Kubernetes配置
+      - Parameters:
+          - DashboardUsername
+          - DashboardPassword
+          - DbPassword
+          - JwtSecret
+        Label:
+          en: Supabase Configuration
+          zh-cn: Supabase配置
+      - Parameters:
+          - OAuthProvider
+          - OAuthClientId
+          - OAuthClientSecret
+          - EnableSaml
+          - SamlIdpMetadataUrl
+          - SamlDomain
+        Label:
+          en: Auth Configuration
+          zh-cn: 认证配置
