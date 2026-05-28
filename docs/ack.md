@@ -103,9 +103,11 @@ curl -s "http://<Supabase-IP>:8000/auth/v1/settings" -H "apikey: <AnonKey>" | py
 不习惯 `kubectl` 命令行的用户，可以在阿里云容器服务控制台操作：
 
 1. 登录 [ACK 控制台](https://cs.console.aliyun.com/) 或 [ACS 控制台](https://acs.console.aliyun.com/)，进入对应集群。
-2. 左侧导航 **工作负载** → **无状态（Deployments）**，选择 Supabase 所在的命名空间。
-3. 找到 `supabase-supabase-auth`，点击名称进入详情。
-4. 点击右上角 **编辑** → **环境变量**，可直接添加或修改以下变量：
+2. 左侧导航 **工作负载** → **无状态（Deployments）**，选择 Supabase 所在的命名空间。找到 `supabase-supabase-auth`，点击名称进入详情。
+
+      ![image.png](ack_1.jpg)
+
+3. 点击右上角 **编辑** → **环境变量**，可直接添加或修改以下变量：
    - `GOTRUE_SITE_URL` — Manager 公网地址
    - `GOTRUE_URI_ALLOW_LIST` — Manager 公网地址
    - `GOTRUE_SMTP_HOST` / `GOTRUE_SMTP_PORT` / `GOTRUE_SMTP_USER` / `GOTRUE_SMTP_PASS` — SMTP 配置
@@ -113,7 +115,10 @@ curl -s "http://<Supabase-IP>:8000/auth/v1/settings" -H "apikey: <AnonKey>" | py
    - `GOTRUE_MAILER_AUTOCONFIRM` — 设为 `false` 开启邮箱验证
    - `GOTRUE_SAML_ENABLED` / `GOTRUE_SAML_PRIVATE_KEY` — SAML 配置
    - `GOTRUE_SAML_EXTERNAL_URL` / `API_EXTERNAL_URL` — 设为 `http://<Supabase-IP>:8000/auth/v1`
-5. 保存后 Deployment 会自动滚动更新，等待新 Pod Running 即可。
+   
+      ![image.png](ack_2.jpg)
+
+4. 保存后 Deployment 会自动滚动更新，等待新 Pod Running 即可。
 
 ## 四、Manager 控制台配置
 
