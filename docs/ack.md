@@ -2,8 +2,6 @@
 
 ## 一、部署参数
 
-### Supabase 模板参数（`supabase_template.yaml` / `supabase_template_new_cluster.yaml`）
-
 | 参数 | 必填 | 说明 |
 | --- | --- | --- |
 | `ClusterId` | 是（仅已有集群版） | ACK 集群 ID |
